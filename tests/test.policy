@@ -1,0 +1,17 @@
+principal Alice; 
+/*
+class FrontendTest (param:L) ::=
+	field labelMe (label: {Alice:}, param:{Alice:})
+	method giveMeABeginLabel {
+		begin  (label:{})
+		x      (label:{Alice:},param:{Alice:})
+		return (label:{*:})
+	}
+	field arrayField (label: {Alice:}, param:{Alice:}, arraybase:{Bob:})
+;
+
+*/
+
+class foo.* (param:L) ::=
+	field * (label:{L}, param:{L})
+;

@@ -1,0 +1,240 @@
+/*
+ * File          : policy.cup
+ * Project       : jlift-frontend
+ * Description   : Parser for Policy File
+ * Author(s)     : dhking
+ *
+ * Created       : Feb 11, 2008 11:34:42 PM 
+ *
+ * Copyright (c) 2007-2008 The Pennsylvania State University
+ * Systems and Internet Infrastructure Security Laboratory
+ *
+ */
+ 
+ package jliftfrontend.policy.parse;
+
+import java_cup.runtime.*;
+import jliftfrontend.policy.*;
+import jliftfrontend.policy.ProcedurePolicyElement.ProcedurePolicyElementKind;
+import java.util.*;
+
+terminal String CLASSNAME;
+terminal String ID;
+terminal SEMI;
+terminal LBRACE;
+terminal RBRACE;
+terminal LBRACK;
+terminal RBRACK;
+terminal LPAREN;
+terminal RPAREN;
+terminal DEF;
+terminal PRINCIPAL;
+terminal CLASS;
+terminal FIELD;
+terminal METHOD;
+terminal LOCAL;
+terminal CONSTRUCTOR;
+terminal COLON;
+terminal STAR;
+terminal COMMA;
+terminal LABEL;
+terminal PARAM;
+terminal ARRAYBASE;
+terminal BEGIN;
+terminal RETURN;
+terminal RETURNVALUE;
+terminal DOT;
+
+non terminal String regexp;
+non terminal String label; 
+non terminal String opt_colon;
+non terminal LabelPolicyDescriptor label_descriptor;
+non terminal ArrayBaseLabelPolicyDescriptor arraybase_label_descriptor;
+non terminal ParamPolicyDescriptor param_descriptor;
+non terminal PolicyDescriptor policy_descriptor;
+non terminal List policy_descriptor_list;
+
+non terminal ProcedurePolicyElement procedure_policy_member;
+non terminal LocalPolicyStatement local_policy;
+non terminal List procedure_policy_member_list_nonempty;
+non terminal List procedure_policy_member_list;
+non terminal ProcedurePolicyStatement procedure_policy;
+non terminal FieldPolicyStatement field_policy;
+non terminal MemberPolicyStatement member_policy; 
+non terminal List member_policy_list_nonempty;
+non terminal List member_policy_list;
+non terminal ClassPolicyStatement class_policy_noparam;
+non terminal ClassPolicyStatement class_policy_param;
+non terminal ClassPolicyStatement class_policy;
+non terminal PrincipalPolicyStatement principal_policy;
+non terminal String class_name;
+non terminal List policy_list, policy_list_nonempty;
+non terminal PolicyStatement policy_part;
+non terminal JLiftPolicy policy;
+
+/* policy is a list of policy statements, ex:
+ **
+ principal Alice;
+ principal Bob;
+ 
+ class com.gemplus.pacap.purse.PurseApplet ::=
+     method process {
+        begin   (label:{})
+        apdu    (label:{}, param:{})  // optional parameterizaton
+     }
+ ;
+ 
+ class com.gemplus.pacap.purse.Purse ::=
+     field currency (label:{})
+     field balance (label:{},param:{})
+ ;
+ 
+ class com.gemplus.pacap.utils.Decimal (param:L) ::=
+     field intPart (label:{L})
+     field decPart (label:{L})
+ ;
+ */
+ 
+start with policy;
+ 
+// Regexp
+
+regexp ::= ID:n 
+		  {: RESULT = n; :}
+		  | STAR 
+		  {: RESULT = ".*"; :}
+		  | ID:n STAR
+		  {: RESULT = n + ".*"; :} 
+;
+ 
+// Policy declarations
+
+opt_colon ::= COLON 
+		  {: RESULT = ":"; :} 
+		  |  
+		  {: RESULT = ""; :}
+;
+label ::= LBRACE ID:n opt_colon:c RBRACE 
+		  {:   RESULT = "{" + n + c + "}";  :} 
+		  | LBRACE STAR COLON RBRACE // top label
+		  {:   RESULT = "{" + "*:" + "}";  :} 
+		  | LBRACE RBRACE  			// bottom label
+		  {:   RESULT = "{}";  :}
+		  | ID:n 
+		  {:   RESULT = n; :}
+;
+label_descriptor ::= LABEL COLON label:s
+					 {:  RESULT = new LabelPolicyDescriptor(s);  :}
+;
+param_descriptor ::= PARAM COLON label:s
+					 {:  RESULT = new ParamPolicyDescriptor(s);  :}
+;
+arraybase_label_descriptor ::= ARRAYBASE COLON label:s
+					 {:  RESULT = new ArrayBaseLabelPolicyDescriptor(s);  :}
+;
+policy_descriptor ::= param_descriptor:p
+					 {:  RESULT = p;  :} 
+					  | label_descriptor:l
+					 {:  RESULT = l;  :} 
+					  | arraybase_label_descriptor:a
+					 {:  RESULT = a;  :}
+;
+policy_descriptor_list ::= policy_descriptor_list:l COMMA policy_descriptor:d
+					{: l.add(d); RESULT = l; :}
+						   | policy_descriptor:d
+					{: List l = new LinkedList();  l.add(d);  RESULT = l; :}
+;
+
+// Local policy
+
+local_policy ::= LOCAL ID:n LPAREN policy_descriptor_list:pd RPAREN
+					{: RESULT = new LocalPolicyStatement(n, pd); :}
+;
+
+// Method policy
+
+procedure_policy_member ::= BEGIN LPAREN policy_descriptor_list:pd RPAREN 
+					{: RESULT = new ProcedurePolicyElement(ProcedurePolicyElement.BEGIN, pd); :}
+						 | RETURN LPAREN policy_descriptor_list:pd RPAREN
+					{: RESULT = new ProcedurePolicyElement(ProcedurePolicyElement.RETURN, pd); :}
+						 | RETURNVALUE LPAREN policy_descriptor_list:pd RPAREN
+					{: RESULT = new ProcedurePolicyElement(ProcedurePolicyElement.RETURNVALUE, pd); :}
+						 | ID:n LPAREN policy_descriptor_list:pd RPAREN
+					{: RESULT = new ProcedurePolicyElement(ProcedurePolicyElement.FORMAL, n, pd); :}
+						 | local_policy:l
+					{: RESULT = l; :}
+;
+procedure_policy_member_list_nonempty ::= procedure_policy_member_list_nonempty:l procedure_policy_member:m
+					{: l.add(m);  RESULT = l; :} 
+									 | procedure_policy_member:m
+					{: List l = new LinkedList(); l.add(m);  RESULT = l; :}
+;
+procedure_policy_member_list ::= procedure_policy_member_list_nonempty:l
+					{: RESULT = l; :} 
+|
+					{:  RESULT = new LinkedList();  :}
+;
+procedure_policy ::= METHOD ID:n LBRACE procedure_policy_member_list:l RBRACE
+	{: RESULT = new ProcedurePolicyStatement(n, l); :}
+;
+
+// Field policy
+
+field_policy ::= FIELD regexp:n LPAREN policy_descriptor_list:l RPAREN 
+	{: RESULT = new FieldPolicyStatement(n, l); :}
+;
+
+// Member description
+
+member_policy ::= field_policy:f
+	{:  RESULT = f;  :}
+			      | procedure_policy:m
+	{:  RESULT = m;  :}
+;
+member_policy_list_nonempty ::= member_policy_list_nonempty:l member_policy:m
+	{:  l.add(m);  RESULT = l;  :}
+							  | member_policy:m
+	{:  List l = new LinkedList();  l.add(m);  RESULT = l;  :}
+;
+member_policy_list ::= member_policy_list_nonempty:l
+	{:  RESULT = l;  :} 
+|
+	{:  RESULT = new LinkedList();  :}
+;
+class_name ::= CLASSNAME:s   			{: RESULT = s; :}
+			   | CLASSNAME:s DOT STAR   {: RESULT = s + "\\..*"; :}
+			   | ID:s DOT STAR		    {: RESULT = s + "\\..*"; :}
+			   | regexp:r	 			{: RESULT = r; :}
+;
+class_policy_noparam ::= CLASS class_name:c DEF member_policy_list:l
+			{:  RESULT = new ClassPolicyStatement(c,l,null);  :}
+;
+class_policy_param ::= CLASS class_name:c LPAREN PARAM COLON ID:n RPAREN DEF member_policy_list:l
+			{:  RESULT = new ClassPolicyStatement(c,l,n);  :} 
+;
+class_policy ::=  class_policy_noparam:c
+			{:  RESULT = c; :}
+				  | class_policy_param:c
+			{:  RESULT = c; :}
+;
+principal_policy ::= PRINCIPAL ID:n 
+	{: RESULT = new PrincipalPolicyStatement(n); :}
+;
+policy_part ::= class_policy:cp SEMI
+			{: RESULT = cp; :}
+			  | principal_policy:pp SEMI
+			{: RESULT = pp; :}
+;
+policy_list_nonempty ::= policy_list_nonempty:l policy_part:p
+			{: l.add(p);  RESULT = l; :}  
+					     | policy_part:p
+			{: List l = new LinkedList();  l.add(p);  RESULT = l;  :}
+; 
+policy_list ::= policy_list_nonempty:l
+	{: RESULT = l;  :}
+|
+	{:  RESULT = new LinkedList();  :}
+;
+policy ::= policy_list:l
+	{: RESULT = new JLiftPolicy(l); :}
+;

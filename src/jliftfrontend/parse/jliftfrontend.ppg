@@ -1,0 +1,23 @@
+// Assumes polyglot.jar is in classpath
+include "polyglot/parse/java12.cup"
+
+package jliftfrontend.parse;
+
+import jliftfrontend.types.JliftFrontendTypeSystem;
+import jliftfrontend.ast.JliftFrontendNodeFactory;
+import polyglot.parse.Name;
+
+parser Grm extends polyglot.parse.Grm {:
+    public final JliftFrontendTypeSystem ts;
+    public final JliftFrontendNodeFactory nf;
+
+    public Grm(Lexer l, TypeSystem t, NodeFactory n, ErrorQueue q) {
+        super(l, t, n, q);
+        ts = (JliftFrontendTypeSystem) t;
+        nf = (JliftFrontendNodeFactory) n;
+    }
+:};
+
+start with goal;
+
+// TODO: modify the default Java grammar using PPG operations
